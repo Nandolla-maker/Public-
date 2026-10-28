@@ -10,7 +10,7 @@ chk gateway_server.py dacfff37d9483927ee100d54a0ae9cb672f12f06
 chk local_runner.py 6b0db1c931564b33570e4259f93a3fe50d39af10
 chk gateway_vps.py e7138464943d59af5587ae00c4859ae95c02a7e0
 chk spectro-gateway-vps.service e31c284ec77ee2b83b26da912a91d11993752f98
-chk gateway_install.sh 94adda92020e57f1be854c7b4f579fc8298a6762
+chk gateway_install.sh 5d03d58ec8dcc731a377d14016f6ecb43afdc30a
 chk ../probe_gate.py 837c8d6a2912c5030fd21f4d8730f47fd8e3c96f
 chk ../install/probe_status_relay.py 7d14b7944ad43d78d9faee5a9e68d1b4fb4c5ae6
 chk ../install/spectro-probe-status-relay.service e15ec25bef305fa7dd948dfa2c889e0a3acb386c

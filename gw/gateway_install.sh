@@ -76,6 +76,7 @@ install_(){
   install -m 0644 -o root -g root "$HERE/$RELAY_UNIT" "$R/etc/systemd/system/$RELAY_UNIT"
   install -m 0644 -o root -g root "$HERE/$UNIT" "$R/etc/systemd/system/$UNIT"
   if [ "$SKIP" != 1 ]; then
+    umask 022                                   # o venv precisa ser legivel/executavel pela conta sem privilegio (umask 077 o deixava so de root)
     python3 -m venv "$GW/venv"
     "$GW/venv/bin/pip" install -q --disable-pip-version-check "mcp==2.3.0" "cryptography==50.0.1"
     runuser -u spectro-probe -- "$GW/venv/bin/python" -I -c "import mcp, cryptography, uvicorn; print('DEPS_OK', mcp.__name__)" || die "dependencias nao importam"
