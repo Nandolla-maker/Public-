@@ -1,0 +1,33 @@
+[Unit]
+Description=SPECTRO tunel de SAIDA (OpenAI Secure MCP Tunnel) -> gateway em 127.0.0.1
+After=network-online.target spectro-gateway-vps.service
+Wants=network-online.target
+BindsTo=spectro-gateway-vps.service spectro-sovereign-supervisor-r1.service
+ConditionPathExists=!/etc/spectro/SOVEREIGN_HALT
+ConditionPathExists=!/etc/spectro/cognitive-r1/SOVEREIGN_HALT
+ConditionPathExists=!/srv/spectro/two-domain-r0/SOVEREIGN_HALT
+ConditionPathExists=!/srv/spectro/SOVEREIGN_HALT
+ConditionPathExists=!/var/lib/spectro-gateway/state/STOP
+
+[Service]
+Type=simple
+User=spectro-tunnel
+Group=spectro-tunnel
+EnvironmentFile=/etc/spectro/tunnel.env
+ExecStart=/opt/spectro/tunnel/tunnel-client-runtime run
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+KillMode=control-group
+SendSIGKILL=yes
+TimeoutStopSec=5
+Restart=on-failure
+RestartSec=10
+
+# Sem [Install]: nao sobe no boot. Iniciado so com /root/aprovo-tunel-iniciar.
