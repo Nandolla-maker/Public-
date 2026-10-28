@@ -60,6 +60,7 @@ install_(){
   [[ "$OWNER_PUBKEY" =~ ^[A-Za-z0-9_-]{43}$ ]] || die "OWNER_PUBKEY invalida"
   [[ "$PORT" =~ ^[0-9]{4,5}$ ]] || die "porta invalida"
   if [ "$SKIP" != 1 ]; then
+    python3 -c 'import ensurepip, venv' 2>/dev/null || die "falta o pacote python3-venv. NADA foi alterado. Se aprovar: apt install -y python3-venv"
     ! ss -ltn | grep -q ":$PORT " || die "porta $PORT ja em uso"
     for f in "${APP_FILES[@]}" probe_status_relay.py "$UNIT" "$RELAY_UNIT"; do [ -f "$HERE/$f" ] || die "falta $f ao lado do instalador"; done
     useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin --comment "SPECTRO gateway R0" spectro-probe
