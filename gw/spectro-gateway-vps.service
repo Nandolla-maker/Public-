@@ -1,0 +1,33 @@
+[Unit]
+Description=SPECTRO gateway VPS R0.3 (MCP em 127.0.0.1; grant assinado; STOP no meio da execucao)
+After=network-online.target spectro-sovereign-supervisor-r1.service spectro-probe-status-relay.service
+Wants=network-online.target
+BindsTo=spectro-sovereign-supervisor-r1.service
+Requires=spectro-probe-status-relay.service
+ConditionPathExists=!/etc/spectro/SOVEREIGN_HALT
+ConditionPathExists=!/etc/spectro/cognitive-r1/SOVEREIGN_HALT
+ConditionPathExists=!/srv/spectro/two-domain-r0/SOVEREIGN_HALT
+ConditionPathExists=!/srv/spectro/SOVEREIGN_HALT
+
+[Service]
+Type=simple
+User=spectro-probe
+Group=spectro-probe
+EnvironmentFile=/etc/spectro/gateway.env
+StateDirectory=spectro-gateway
+StateDirectoryMode=0700
+ExecStartPre=/usr/bin/install -d -m 0700 /var/lib/spectro-gateway/state /var/lib/spectro-gateway/work
+ExecStart=/opt/spectro/gateway/venv/bin/python -E -s /opt/spectro/gateway/gateway_vps.py ${GATEWAY_PROFILE} /etc/spectro/owner_public.key spectro-cloud-r0 /var/lib/spectro-gateway/state /run/spectro-probe/status.json ${GATEWAY_PORT} ${PUBLIC_HOST}
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/spectro-gateway
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+KillMode=control-group
+SendSIGKILL=yes
+TimeoutStopSec=5
+Restart=on-failure
+RestartSec=5
+
+# Sem [Install]: nao sobe no boot. Iniciada so depois dos gates e da aprovacao do dono.
