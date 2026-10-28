@@ -1,7 +1,8 @@
 #!/bin/bash
 # SPECTRO probe install R0 (candidato). Subcomandos: snapshot | install | verify | start | rollback
 # Precisa de root na VPS. Variaveis: TAILNET_IP (obrigatoria p/ install), PUBKEY_FILE (chave publica da sonda, 1 linha),
-# STATUS_PATH (caminho do status.json do supervisor), BACKUP_DIR. DESTROOT/SKIP_SYSTEM=1 so para teste em sandbox.
+# STATUS_PATH (opcional; padrao /run/spectro-probe/status.json, copia minima publicada pelo relay root), BACKUP_DIR.
+# DESTROOT/SKIP_SYSTEM=1 so para teste em sandbox. O `install` inicia SOMENTE o relay do status (nunca o sshd).
 # NAO toca na porta 22, em ACL, firewall, nem no ssh.service. NAO emite grant. NAO inicia o servico fora de `start`.
 set -euo pipefail
 umask 077
@@ -9,9 +10,12 @@ R="${DESTROOT:-}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 BACKUP_DIR="${BACKUP_DIR:-$R/var/backups/spectro-probe-r0}"
 UNIT=spectro-probe-sshd.service
+RELAY_UNIT=spectro-probe-status-relay.service
 SKIP="${SKIP_SYSTEM:-0}"
+RELAY_FILES=("$R/usr/local/lib/spectro/probe_status_relay.py" "$R/etc/systemd/system/$RELAY_UNIT")
 TARGETS=("$R/usr/local/lib/spectro/probe_gate.py" "$R/etc/spectro/probe_authorized_keys" "$R/etc/spectro/sshd_probe_config"
-         "$R/etc/systemd/system/$UNIT" "$R/etc/spectro/probe_ssh_host_ed25519_key" "$R/etc/spectro/probe_ssh_host_ed25519_key.pub")
+         "$R/etc/systemd/system/$UNIT" "$R/etc/spectro/probe_ssh_host_ed25519_key" "$R/etc/spectro/probe_ssh_host_ed25519_key.pub"
+         "${RELAY_FILES[@]}")
 BASE_FILES=("$R/etc/passwd" "$R/etc/group" "$R/etc/shadow" "$R/etc/gshadow" "$R/etc/ssh/sshd_config"
             "$R/lib/systemd/system/ssh.service" "$R/lib/systemd/system/ssh.socket"
             "$R/etc/systemd/system/spectro-sovereign-supervisor-r1.service"
@@ -54,7 +58,9 @@ verify(){
 install_(){
   need_root
   verify
-  : "${TAILNET_IP:?TAILNET_IP obrigatorio}" "${PUBKEY_FILE:?PUBKEY_FILE obrigatorio}" "${STATUS_PATH:?STATUS_PATH obrigatorio}"
+  : "${TAILNET_IP:?TAILNET_IP obrigatorio}" "${PUBKEY_FILE:?PUBKEY_FILE obrigatorio}"
+  # O gate le a copia minima publicada pelo relay (root), nunca o status.json original nem o espelho do Paperclip.
+  STATUS_PATH="${STATUS_PATH:-/run/spectro-probe/status.json}"
   [[ "$TAILNET_IP" =~ ^100\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || die "TAILNET_IP nao parece IP tailnet 100.x"
   [ "$(wc -l < "$PUBKEY_FILE")" -le 1 ] && grep -qE '^ssh-ed25519 [A-Za-z0-9+/=]+( .*)?$' "$PUBKEY_FILE" || die "PUBKEY_FILE deve ter UMA chave ssh-ed25519"
   [[ "$STATUS_PATH" = /* ]] || die "STATUS_PATH deve ser absoluto"
@@ -64,7 +70,6 @@ install_(){
     usermod -p '*' spectro-probe                     # sem senha, mas NAO bloqueada (sshd recusa contas com "!")
     gpasswd -d spectro-probe sudo >/dev/null 2>&1 || true
     ! id -nG spectro-probe | grep -qwE 'sudo|wheel|root|adm|docker' || die "spectro-probe em grupo privilegiado"
-    runuser -u spectro-probe -- test -r "$STATUS_PATH" || die "spectro-probe nao le $STATUS_PATH (use o espelho ou ajuste permissao com autorizacao)"
   fi
   install -d -m 0755 -o root -g root "$LIB/spectro" "$ETC/spectro"
   sed "s|^STATUS_PATH = None\$|STATUS_PATH = \"$STATUS_PATH\"|" "$HERE/../probe_gate.py" > "$LIB/spectro/probe_gate.py"
@@ -81,8 +86,17 @@ install_(){
     /usr/sbin/sshd -t -f "$ETC/spectro/sshd_probe_config" || die "sshd -t falhou (nada iniciado)"
   fi
   install -m 0644 -o root -g root "$HERE/$UNIT" "$R/etc/systemd/system/$UNIT"
-  [ "$SKIP" = 1 ] || systemctl daemon-reload
-  echo "INSTALL_OK (servico NAO habilitado e NAO iniciado)."
+  install -m 0644 -o root -g root "$HERE/probe_status_relay.py" "$LIB/spectro/probe_status_relay.py"
+  install -m 0644 -o root -g root "$HERE/$RELAY_UNIT" "$R/etc/systemd/system/$RELAY_UNIT"
+  if [ "$SKIP" != 1 ]; then
+    systemctl daemon-reload
+    systemctl start "$RELAY_UNIT"          # SOMENTE o relay (le o status do supervisor e publica copia minima); o sshd NAO inicia
+    for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$STATUS_PATH" ] && break; sleep 1; done
+    runuser -u spectro-probe -- test -r "$STATUS_PATH" || die "spectro-probe nao le $STATUS_PATH (relay nao publicou; veja: journalctl -u $RELAY_UNIT). Rollback disponivel."
+    runuser -u spectro-probe -- python3 -I -c "import json,sys;d=json.load(open(sys.argv[1]));print('STATUS_RELAY_OK',d['state'],d['kernel']['state'],'epoca',d['kernel']['epoch'])" "$STATUS_PATH" \
+      || die "copia do status ilegivel pela sonda"
+  fi
+  echo "INSTALL_OK (relay do status ATIVO; sshd da sonda NAO habilitado e NAO iniciado; relay nao habilitado no boot)."
   [ "$SKIP" = 1 ] || { echo "Impressao digital da host key (pinar no known_hosts do Mac, por canal confiavel):"; ssh-keygen -lf "$ETC/spectro/probe_ssh_host_ed25519_key.pub"; }
   sha256sum "$LIB/spectro/probe_gate.py" "$ETC/spectro/sshd_probe_config" "$ETC/spectro/probe_authorized_keys" "$R/etc/systemd/system/$UNIT"
 }
@@ -104,7 +118,10 @@ rollback(){
     systemctl stop "$UNIT" 2>/dev/null || true
     systemctl disable "$UNIT" 2>/dev/null || true
     systemctl kill --kill-who=all --signal=SIGKILL "$UNIT" 2>/dev/null || true
+    systemctl stop "$RELAY_UNIT" 2>/dev/null || true
+    systemctl kill --kill-who=all --signal=SIGKILL "$RELAY_UNIT" 2>/dev/null || true
   fi
+  rm -f -- "${RELAY_FILES[@]}"            # cobre snapshots tirados antes do relay existir
   # remove SOMENTE o que a transacao criou (todos constam como ABSENT no manifesto); nunca restaura bases de conta as cegas
   while read -r st h p; do
     [ "$st" = ABSENT ] || continue

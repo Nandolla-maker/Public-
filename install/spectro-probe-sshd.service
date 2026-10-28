@@ -1,8 +1,9 @@
 [Unit]
 Description=SPECTRO probe sshd R0 (somente leitura, comando forcado)
-After=network-online.target tailscaled.service spectro-sovereign-supervisor-r1.service
+After=network-online.target tailscaled.service spectro-sovereign-supervisor-r1.service spectro-probe-status-relay.service
 Wants=network-online.target
 BindsTo=spectro-sovereign-supervisor-r1.service
+Requires=spectro-probe-status-relay.service
 ConditionPathExists=!/etc/spectro/SOVEREIGN_HALT
 ConditionPathExists=!/etc/spectro/cognitive-r1/SOVEREIGN_HALT
 ConditionPathExists=!/srv/spectro/two-domain-r0/SOVEREIGN_HALT

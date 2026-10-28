@@ -1,0 +1,25 @@
+[Unit]
+Description=SPECTRO probe status relay R0 (copia minima e somente leitura do status.json do supervisor)
+After=spectro-sovereign-supervisor-r1.service
+BindsTo=spectro-sovereign-supervisor-r1.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -I /usr/local/lib/spectro/probe_status_relay.py
+RuntimeDirectory=spectro-probe
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=no
+User=root
+ProtectSystem=strict
+ReadOnlyPaths=/var/lib/spectro-sovereign-r1
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_DAC_READ_SEARCH
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+KillMode=control-group
+Restart=on-failure
+RestartSec=2
+
+# Sem [Install]: iniciada pelo instalador; NAO habilitada no boot.
