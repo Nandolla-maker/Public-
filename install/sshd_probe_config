@@ -1,0 +1,37 @@
+# SPECTRO probe sshd R0 (candidato). Instancia SEPARADA do sshd da porta 22. Somente conta spectro-probe, so chave dedicada,
+# comando forcado, sem pty/forwarding/sftp. O IP de escuta e substituido pelo instalador (ListenAddress tailnet da VPS).
+Port 2222
+ListenAddress @TAILNET_IP@
+HostKey /etc/spectro/probe_ssh_host_ed25519_key
+PidFile /run/spectro-probe-sshd.pid
+AllowUsers spectro-probe
+AuthenticationMethods publickey
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+PermitRootLogin no
+UsePAM no
+StrictModes yes
+AuthorizedKeysFile /etc/spectro/probe_authorized_keys
+PermitTTY no
+DisableForwarding yes
+AllowTcpForwarding no
+AllowAgentForwarding no
+AllowStreamLocalForwarding no
+X11Forwarding no
+PermitTunnel no
+GatewayPorts no
+PermitUserEnvironment no
+PermitUserRC no
+MaxAuthTries 2
+MaxSessions 1
+MaxStartups 3:50:10
+LoginGraceTime 15
+ClientAliveInterval 15
+ClientAliveCountMax 2
+PrintMotd no
+LogLevel VERBOSE
+# Sem "Subsystem": nao ha sftp.
+Match User spectro-probe
+    ForceCommand /usr/bin/python3 -I /usr/local/lib/spectro/probe_gate.py

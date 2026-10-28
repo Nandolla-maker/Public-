@@ -1,0 +1,21 @@
+[Unit]
+Description=SPECTRO probe sshd R0 (somente leitura, comando forcado)
+After=network-online.target tailscaled.service spectro-sovereign-supervisor-r1.service
+Wants=network-online.target
+BindsTo=spectro-sovereign-supervisor-r1.service
+ConditionPathExists=!/etc/spectro/SOVEREIGN_HALT
+ConditionPathExists=!/etc/spectro/cognitive-r1/SOVEREIGN_HALT
+ConditionPathExists=!/srv/spectro/two-domain-r0/SOVEREIGN_HALT
+ConditionPathExists=!/srv/spectro/SOVEREIGN_HALT
+
+[Service]
+Type=simple
+ExecStartPre=/usr/sbin/sshd -t -f /etc/spectro/sshd_probe_config
+ExecStart=/usr/sbin/sshd -D -e -f /etc/spectro/sshd_probe_config
+KillMode=control-group
+SendSIGKILL=yes
+TimeoutStopSec=5
+Restart=on-failure
+RestartSec=5
+
+# Sem [Install]: NAO e habilitada no boot. Iniciada so por 03_start apos os gates.
