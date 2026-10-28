@@ -134,6 +134,22 @@ def build_mcp(gw, profile, limiter=None):
     return mcp
 
 
+def build_app(mcp, ts):
+    """App ASGI do MCP. 404/405 saem em JSON (o cliente do tunel da OpenAI decodifica o corpo da
+    descoberta OAuth em /.well-known/*; 'Not Found' em texto quebrava com: invalid character 'N')."""
+    from starlette.responses import JSONResponse
+    app = mcp.streamable_http_app(host="127.0.0.1", transport_security=ts, stateless_http=True, json_response=True)
+
+    async def _nf(request, exc):
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+
+    async def _mna(request, exc):
+        return JSONResponse({"detail": "Method Not Allowed"}, status_code=405)
+    app.add_exception_handler(404, _nf)
+    app.add_exception_handler(405, _mna)
+    return app
+
+
 def main(argv):
     """uso: gateway_vps.py read|work PUBKEY_FILE AUD STATE_DIR STATUS_JSON PORT PUBLIC_HOST
     Escuta SO em 127.0.0.1:PORT; PUBLIC_HOST e o Host do tunel (protecao contra DNS rebinding)."""
@@ -147,8 +163,9 @@ def main(argv):
     ts = TransportSecuritySettings(enable_dns_rebinding_protection=True,
                                    allowed_hosts=["127.0.0.1:%s" % port, "localhost:%s" % port, public_host],
                                    allowed_origins=["https://%s" % public_host])
-    build_mcp(gw, profile).run("streamable-http", host="127.0.0.1", port=int(port), transport_security=ts,
-                               stateless_http=True, json_response=True)
+    import uvicorn
+    app = build_app(build_mcp(gw, profile), ts)
+    uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=int(port), log_level="warning")).run()
     return 0
 
 
